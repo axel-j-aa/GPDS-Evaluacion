@@ -1,0 +1,69 @@
+name: CI (install / lint / test / coverage)
+
+on:
+  push:
+    branches: [develop, feature/**, release/**, hotfix/**]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  backend:
+    name: Backend (Node 20)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: biblioteca_test
+          MYSQL_USER: lib_admin
+          MYSQL_PASSWORD: lib_pass
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: 'npm', cache-dependency-path: 'backend/package-lock.json' }
+      - run: npm ci
+      - name: Esperar MySQL
+        run: |
+          for i in {1..30}; do
+            (echo > /dev/tcp/127.0.0.1/3306) >/dev/null 2>&1 && break
+            sleep 2
+          done
+      - name: Variables test
+        run: |
+          cat <<EOF > .env.test
+          NODE_ENV=test
+          API_PORT=4000
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_USER=lib_admin
+          DB_PASSWORD=lib_pass
+          DB_NAME=biblioteca_test
+          EOF
+      - run: npm run lint --if-present
+      - run: npm test -- --coverage --runInBand
+      - uses: actions/upload-artifact@v4
+        with: { name: backend-coverage, path: backend/coverage/ }
+
+  frontend:
+    name: Frontend (Node 20)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: 'npm', cache-dependency-path: 'frontend/package-lock.json' }
+      - run: npm ci
+      - run: npm run lint --if-present
+      - run: npm test -- --coverage --runInBand
+      - uses: actions/upload-artifact@v4
+        with: { name: frontend-coverage, path: frontend/coverage/ }

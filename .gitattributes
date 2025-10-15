@@ -1,0 +1,8 @@
+# Normaliza fin de línea en todos los SO
+* text=auto eol=lf
+
+# Trata binarios comunes como binarios (sin diffs)
+*.pdf binary
+*.csv text
+*.zip binary
+*.7z  binary
